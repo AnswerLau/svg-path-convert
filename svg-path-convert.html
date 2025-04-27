@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVG路径优化换工具</title>
+  <!-- 引入Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  
+  <!-- 引入组件库 (样式将自动加载) -->
+  <script src="https://cdn.jsdelivr.net/npm/@answerlau/design-system@1.0.2/dist/design-system.min.js"></script>
+
+  <!-- 引入SVG路径库 -->
+  <script src="https://cdn.jsdelivr.net/npm/paper@0.12.15/dist/paper-full.min.js"></script>
+  <!-- 引入JSZip用于批量下载 -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background-color: #fff;
+      border-radius: 4px;
+      box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .upload-area {
+      border: 2px dashed #dcdfe6;
+      border-radius: 6px;
+      padding: 40px;
+      text-align: center;
+      background-color: #f8f9fa;
+      transition: all 0.3s;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+    .upload-area:hover {
+      border-color: #409eff;
+      background-color: #f0f7ff;
+    }
+    .upload-area.active {
+      border-color: #409eff;
+      background-color: #e6f1fc;
+    }
+    .upload-icon {
+      font-size: 48px;
+      color: #909399;
+      margin-bottom: 10px;
+    }
+    .upload-icon svg {
+      width: 48px;
+      height: 48px;
+      fill: #909399;
+      transition: all 0.3s;
+    }
+    .upload-area:hover .upload-icon svg {
+      fill: #409eff;
+    }
+    .upload-text {
+      color: #606266;
+      font-size: 16px;
+      margin-bottom: 5px;
+    }
+    .upload-hint {
+      color: #909399;
+      font-size: 14px;
+    }
+    .preview-title {
+      font-weight: bold;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ebeef5;
+      color: #303133;
+    }
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .preview-svg {
+      text-align: center;
+      padding: 20px;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .preview-svg h4 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      color: #606266;
+    }
+    .preview-svg img {
+      max-width: 100%;
+      max-height: 250px;
+    }
+    .svg-info {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .operation-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .file-list {
+      margin-top: 20px;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      border-bottom: 1px solid #ebeef5;
+    }
+    .file-name {
+      flex: 1;
+      margin-right: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-status {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-right: 10px;
+    }
+    .status-pending {
+      background-color: #e6e6e6;
+      color: #909399;
+    }
+    .status-success {
+      background-color: #f0f9eb;
+      color: #67c23a;
+    }
+    .status-error {
+      background-color: #fef0f0;
+      color: #f56c6c;
+    }
+    .file-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .hidden-input {
+      display: none;
+    }
+    .version {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--color-text-disabled);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="container">
+      <div class="header">
+        <h2>SVG路径优化换工具</h2>
+        <p style="font-size: 14px; color: var(--color-red-default);">转换前请将图标描边轮廓化并合并所有图层</p>
+      </div>
+      
+      <input type="file" ref="fileInput" @change="handleFileChange" accept=".svg" class="hidden-input">
+      
+      <div class="upload-area" :class="{ active: isDragging }" 
+           @click="triggerFileInput"
+           @dragenter="onDragEnter"
+           @dragover.prevent
+           @dragleave="onDragLeave"
+           @drop="onDrop">
+        <div class="upload-icon">
+          <svg t="1744103924762" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="16685" width="200" height="200"><path d="M554.666667 128H256a128 128 0 0 0-128 128v512a128 128 0 0 0 128 128h512a128 128 0 0 0 128-128v-298.666667h-85.333333v165.632l-151.594667-75.776a42.666667 42.666667 0 0 0-32.554667-2.346666L213.333333 694.613333V256a42.666667 42.666667 0 0 1 42.666667-42.666667h298.666667V128z m82.048 515.413333L810.666667 730.368V768a42.666667 42.666667 0 0 1-42.666667 42.666667H256a42.666667 42.666667 0 0 1-39.722667-27.093334l420.437334-140.16zM725.333333 298.666667h-85.333333V213.333333h85.333333V128h85.333334v85.333333h85.333333v85.333334h-85.333333v85.333333h-85.333334V298.666667z m-341.333333 213.333333a85.333333 85.333333 0 1 0 0-170.666667 85.333333 85.333333 0 0 0 0 170.666667z" p-id="16686"></path></svg></div>
+        <div class="upload-text">点击上传 SVG 文件或拖拽文件到此处</div>
+        <div class="upload-hint">支持SVG文件上传，单个文件不超过 5MB</div>
+      </div>
+      
+      <div class="file-list" v-if="files.length > 0">
+        <div class="file-item" v-for="file in files" :key="file.id">
+          <div class="file-name">{{ file.name }}</div>
+          <div class="file-status" v-if="file.status" :class="getStatusClass(file.status)">{{ getStatusText(file.status) }}</div>
+          <div class="file-actions">
+            <ds-button size="small" type="danger" @click.stop="removeFileById(file.id)">删除</ds-button>
+          </div>
+        </div>
+      </div>
+      
+      <ds-alert v-if="errorMessage" type="error" style="margin-top: 20px;" :closable="true" @close="errorMessage = ''">
+        {{ errorMessage }}
+      </ds-alert>
+      
+      <div class="preview-area" v-if="files.length > 0">
+        
+        <div class="operation-buttons">
+          <ds-button size="large" type="primary" @click="batchTransform" :loading="transforming" :disabled="transforming">
+            {{ transforming ? '转换中...' : '批量转换' }}
+          </ds-button>
+          <ds-button size="large" type="secondary" @click="batchSave" :disabled="!hasProcessedFiles">
+            批量保存
+          </ds-button>
+        </div>
+        
+      </div>
+    </div>
+    <div class="version" style="text-align: center; margin-top: 20px;">版本 1.0.0 by @Answer</div>
+  </div>
+  
+  <script>
+    const app = Vue.createApp({
+      data() {
+        return {
+          files: [],
+          currentSvg: null,
+          transformedSvg: null,
+          isDragging: false,
+          errorMessage: '',
+          transforming: false,
+          debugMode: false,
+          fileIdCounter: 0
+        }
+      },
+      computed: {
+        hasProcessedFiles() {
+          return this.files.some(file => file.transformedContent);
+        }
+      },
+      mounted() {
+        // 初始化 Paper.js
+        paper.setup(document.createElement('canvas'));
+      },
+      methods: {
+        triggerFileInput() {
+          this.$refs.fileInput.click();
+        },
+        
+        handleFileChange(e) {
+          const newFiles = Array.from(e.target.files);
+          this.processFiles(newFiles);
+          // 清空文件输入框，以便可以选择相同的文件
+          e.target.value = '';
+        },
+        
+        onDragEnter(e) {
+          e.preventDefault();
+          this.isDragging = true;
+        },
+        
+        onDragLeave(e) {
+          e.preventDefault();
+          this.isDragging = false;
+        },
+        
+        onDrop(e) {
+          e.preventDefault();
+          this.isDragging = false;
+          
+          const newFiles = Array.from(e.dataTransfer.files);
+          this.processFiles(newFiles);
+        },
+        
+        processFiles(newFiles) {
+          // 检查文件类型
+          const invalidFiles = newFiles.filter(file => !file.name.toLowerCase().endsWith('.svg'));
+          if (invalidFiles.length > 0) {
+            this.errorMessage = `以下文件不是SVG格式: ${invalidFiles.map(f => f.name).join(', ')}`;
+            // 过滤掉非SVG文件
+            newFiles = newFiles.filter(file => file.name.toLowerCase().endsWith('.svg'));
+          }
+          
+          // 检查文件大小
+          const oversizedFiles = newFiles.filter(file => file.size > 5 * 1024 * 1024);
+          if (oversizedFiles.length > 0) {
+            this.errorMessage = `以下文件超过5MB: ${oversizedFiles.map(f => f.name).join(', ')}`;
+            // 过滤掉超大文件
+            newFiles = newFiles.filter(file => file.size <= 5 * 1024 * 1024);
+          }
+          
+          // 读取SVG文件内容
+          newFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              this.fileIdCounter++;
+              const fileObj = {
+                id: this.fileIdCounter,
+                file: file,
+                name: file.name,
+                size: file.size,
+                lastModified: file.lastModified,
+                content: e.target.result,
+                transformedContent: null,
+                status: 'pending'
+              };
+              
+              this.files.push(fileObj);
+              
+              // 如果这是第一个文件，自动预览它
+              if (this.files.length === 1) {
+                this.currentSvg = this.files[0];
+              }
+            };
+            reader.readAsText(file);
+          });
+        },
+        
+        previewFile(index) {
+          this.currentSvg = this.files[index];
+          this.transformedSvg = null; // 清除之前的转换结果
+        },
+        
+        removeFile(index) {
+          // 此方法保留但不再使用
+          console.warn('removeFile by index is deprecated');
+        },
+        
+        removeFileById(fileId) {
+          // 使用ID找到文件的索引
+          const fileIndex = this.files.findIndex(file => file.id === fileId);
+          
+          if (fileIndex === -1) {
+            console.error('File not found with id:', fileId);
+            return;
+          }
+          
+          // 如果要删除的是当前预览的文件，则清除预览
+          if (this.currentSvg && this.currentSvg.id === fileId) {
+            this.currentSvg = null;
+            this.transformedSvg = null;
+          }
+          
+          // 创建一个新数组，排除要删除的文件
+          this.files = this.files.filter(file => file.id !== fileId);
+          
+          // 如果还有其他文件，预览第一个
+          if (this.files.length > 0 && !this.currentSvg) {
+            this.currentSvg = this.files[0];
+          }
+        },
+        
+        getStatusClass(status) {
+          switch(status) {
+            case 'success': return 'status-success';
+            case 'error': return 'status-error';
+            default: return 'status-pending';
+          }
+        },
+        
+        getStatusText(status) {
+          switch(status) {
+            case 'success': return '已转换';
+            case 'error': return '失败';
+            default: return '待处理';
+          }
+        },
+        
+        transformSvg() {
+          if (!this.currentSvg) {
+            this.$message.error('请先上传 SVG 文件');
+            return;
+          }
+
+          this.transforming = true;
+          
+          try {
+            const result = this.processSvgContent(this.currentSvg.content);
+            
+            // 更新转换后的SVG
+            this.transformedSvg = result;
+            this.currentSvg.transformedContent = result;
+            this.currentSvg.status = 'success';
+            
+            this.$message.success('SVG 转换成功');
+          } catch (error) {
+            console.error('SVG 转换错误:', error);
+            this.$message.error('SVG 转换失败: ' + error.message);
+            this.currentSvg.status = 'error';
+          } finally {
+            this.transforming = false;
+          }
+        },
+        
+        async batchTransform() {
+          if (this.files.length === 0) {
+            this.$message.error('请先上传 SVG 文件');
+            return;
+          }
+          
+          this.transforming = true;
+          let successCount = 0;
+          let failedCount = 0;
+          
+          for (let i = 0; i < this.files.length; i++) {
+            const file = this.files[i];
+            
+            // 跳过已经处理成功的文件
+            if (file.status === 'success') {
+              successCount++;
+              continue;
+            }
+            
+            try {
+              const result = this.processSvgContent(file.content);
+              
+              // 更新文件状态
+              file.transformedContent = result;
+              file.status = 'success';
+              successCount++;
+              
+              // 短暂停顿以避免UI阻塞
+              await new Promise(resolve => setTimeout(resolve, 0));
+            } catch (error) {
+              console.error(`转换文件 ${file.name} 出错:`, error);
+              file.status = 'error';
+              failedCount++;
+            }
+          }
+          
+          this.transforming = false;
+          
+          if (successCount > 0) {
+            this.$message.success(`成功转换 ${successCount} 个文件`);
+          }
+          
+          if (failedCount > 0) {
+            this.$message.error(`${failedCount} 个文件转换失败`);
+          }
+        },
+        
+        processSvgContent(content) {
+          // 创建一个临时的 DOM 元素来解析 SVG
+          const parser = new DOMParser();
+          const svgDoc = parser.parseFromString(content, 'image/svg+xml');
+          
+          // 获取SVG元素
+          const svgNS = "http://www.w3.org/2000/svg";
+          const originalSvgElement = svgDoc.querySelector('svg');
+          
+          // 创建新的SVG元素
+          const newSvg = document.createElementNS(svgNS, "svg");
+          
+          // 复制原始SVG的属性
+          const attrs = originalSvgElement.attributes;
+          for (let i = 0; i < attrs.length; i++) {
+            newSvg.setAttribute(attrs[i].name, attrs[i].value);
+          }
+          
+          // 获取所有可转换为路径的元素
+          const pathElements = svgDoc.querySelectorAll('path');
+          const shapeElements = svgDoc.querySelectorAll('rect, circle, ellipse, line, polygon, polyline');
+          
+          // 如果没有可处理的元素，抛出错误
+          if (pathElements.length === 0 && shapeElements.length === 0) {
+            throw new Error('SVG 中未找到可转换的元素');
+          }
+
+          // 处理路径元素
+          this.processPathElements(pathElements, newSvg);
+          
+          // 处理形状元素，转换为路径
+          this.processShapeElements(shapeElements, newSvg);
+          
+          // 复制非路径和非形状元素
+          const otherElements = svgDoc.querySelectorAll('svg > :not(path):not(rect):not(circle):not(ellipse):not(line):not(polygon):not(polyline)');
+          for (let i = 0; i < otherElements.length; i++) {
+            const element = otherElements[i];
+            const newElement = element.cloneNode(true);
+            newSvg.appendChild(newElement);
+          }
+          
+          // 序列化SVG
+          const serializer = new XMLSerializer();
+          return serializer.serializeToString(newSvg);
+        },
+        
+        processPathElements(pathElements, newSvg) {
+          // 处理每个路径元素
+          for (let i = 0; i < pathElements.length; i++) {
+            const pathElement = pathElements[i];
+            const currentFillRule = pathElement.getAttribute('fill-rule') || 'nonzero';
+            
+            // 如果当前填充规则是evenodd，则需要转换为nonzero
+            if (currentFillRule === 'evenodd') {
+              const pathD = pathElement.getAttribute('d');
+              if (pathD) {
+                // 创建新的路径元素
+                const newPath = pathElement.cloneNode(true);
+                
+                // 使用修改后的路径数据
+                const convertedPathData = this.convertEvenoddToNonzero(pathD);
+                newPath.setAttribute('d', convertedPathData);
+                newPath.setAttribute('fill-rule', 'nonzero');
+                
+                if (this.debugMode) {
+                  console.log('从evenodd转换为nonzero');
+                  console.log('原始路径:', pathD);
+                  console.log('转换后路径:', convertedPathData);
+                }
+                
+                // 添加到新的SVG
+                newSvg.appendChild(newPath);
+              }
+            } else {
+              // 如果填充规则已经是nonzero，直接复制
+              const newElement = pathElement.cloneNode(true);
+              newSvg.appendChild(newElement);
+            }
+          }
+        },
+        
+        processShapeElements(shapeElements, newSvg) {
+          // 处理每个形状元素，转换为路径
+          for (let i = 0; i < shapeElements.length; i++) {
+            const shapeElement = shapeElements[i];
+            const pathData = this.svg2path(shapeElement);
+            
+            if (pathData) {
+              // 创建新的路径元素
+              const newPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+              
+              // 复制原始元素的属性
+              const attrs = shapeElement.attributes;
+              for (let j = 0; j < attrs.length; j++) {
+                const attrName = attrs[j].name;
+                if (attrName !== 'x' && attrName !== 'y' && attrName !== 'width' && attrName !== 'height' && 
+                    attrName !== 'cx' && attrName !== 'cy' && attrName !== 'r' && attrName !== 'rx' && 
+                    attrName !== 'ry' && attrName !== 'x1' && attrName !== 'y1' && attrName !== 'x2' && 
+                    attrName !== 'y2' && attrName !== 'points') {
+                  newPath.setAttribute(attrName, attrs[j].value);
+                }
+              }
+              
+              // 设置路径数据
+              newPath.setAttribute('d', pathData);
+              
+              // 设置填充规则为nonzero
+              newPath.setAttribute('fill-rule', 'nonzero');
+              
+              // 添加到新的SVG
+              newSvg.appendChild(newPath);
+              
+              if (this.debugMode) {
+                console.log(`将 ${shapeElement.tagName} 转换为 path:`, pathData);
+              }
+            }
+          }
+        },
+        
+        // 将各种SVG元素转换为path数据
+        svg2path(node) {
+          // 匹配路径中数值的正则
+          var regNumber = /[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g;
+
+          if (!node.tagName) return;
+          var tagName = String(node.tagName).toLowerCase();
+
+          switch (tagName) {
+            case 'rect':
+              var x = Number(node.getAttribute('x') || 0);
+              var y = Number(node.getAttribute('y') || 0);
+              var width = Number(node.getAttribute('width'));
+              var height = Number(node.getAttribute('height'));
+              /*
+               * rx 和 ry 的规则是：
+               * 1. 如果其中一个设置为 0 则圆角不生效
+               * 2. 如果有一个没有设置则取值为另一个
+               * 3.rx 的最大值为 width 的一半, ry 的最大值为 height 的一半
+               */
+              var rx = Number(node.getAttribute('rx')) || Number(node.getAttribute('ry')) || 0;
+              var ry = Number(node.getAttribute('ry')) || Number(node.getAttribute('rx')) || 0;
+
+              // 非数值单位计算，如当宽度像100%则忽略
+              if (isNaN(x - y + width - height + rx - ry)) return;
+
+              rx = rx > width / 2 ? width / 2 : rx;
+              ry = ry > height / 2 ? height / 2 : ry;
+
+              // 如果其中一个设置为 0 则圆角不生效
+              if (rx == 0 || ry == 0) {
+                var path = 'M' + x + ' ' + y + 'h' + width + 'v' + height + 'h' + -width + 'z';
+              } else {
+                var path =
+                  'M' +
+                  x +
+                  ' ' +
+                  (y + ry) +
+                  'a' +
+                  rx +
+                  ' ' +
+                  ry +
+                  ' 0 0 1 ' +
+                  rx +
+                  ' ' +
+                  -ry +
+                  'h' +
+                  (width - rx - rx) +
+                  'a' +
+                  rx +
+                  ' ' +
+                  ry +
+                  ' 0 0 1 ' +
+                  rx +
+                  ' ' +
+                  ry +
+                  'v' +
+                  (height - ry - ry) +
+                  'a' +
+                  rx +
+                  ' ' +
+                  ry +
+                  ' 0 0 1 ' +
+                  -rx +
+                  ' ' +
+                  ry +
+                  'h' +
+                  (rx + rx - width) +
+                  'a' +
+                  rx +
+                  ' ' +
+                  ry +
+                  ' 0 0 1 ' +
+                  -rx +
+                  ' ' +
+                  -ry +
+                  'z';
+              }
+              break;
+
+            case 'circle':
+              var cx = Number(node.getAttribute('cx') || 0);
+              var cy = Number(node.getAttribute('cy') || 0);
+              var r = Number(node.getAttribute('r'));
+              
+              if (isNaN(cx - cy + r)) return;
+              
+              var path =
+                'M' +
+                (cx - r) +
+                ' ' +
+                cy +
+                'a' +
+                r +
+                ' ' +
+                r +
+                ' 0 1 0 ' +
+                2 * r +
+                ' 0' +
+                'a' +
+                r +
+                ' ' +
+                r +
+                ' 0 1 0 ' +
+                -2 * r +
+                ' 0' +
+                'z';
+              break;
+
+            case 'ellipse':
+              var cx = Number(node.getAttribute('cx') || 0);
+              var cy = Number(node.getAttribute('cy') || 0);
+              var rx = Number(node.getAttribute('rx'));
+              var ry = Number(node.getAttribute('ry'));
+
+              if (isNaN(cx - cy + rx - ry)) return;
+              
+              var path =
+                'M' +
+                (cx - rx) +
+                ' ' +
+                cy +
+                'a' +
+                rx +
+                ' ' +
+                ry +
+                ' 0 1 0 ' +
+                2 * rx +
+                ' 0' +
+                'a' +
+                rx +
+                ' ' +
+                ry +
+                ' 0 1 0 ' +
+                -2 * rx +
+                ' 0' +
+                'z';
+              break;
+
+            case 'line':
+              var x1 = Number(node.getAttribute('x1') || 0);
+              var y1 = Number(node.getAttribute('y1') || 0);
+              var x2 = Number(node.getAttribute('x2') || 0);
+              var y2 = Number(node.getAttribute('y2') || 0);
+              
+              if (isNaN(x1 - y1 + (x2 - y2))) return;
+
+              var path = 'M' + x1 + ' ' + y1 + 'L' + x2 + ' ' + y2;
+              break;
+
+            case 'polygon':
+            case 'polyline': 
+              // polygon与polyline是一样的,polygon多边形，polyline折线
+              var points = (node.getAttribute('points').match(regNumber) || []).map(Number);
+              
+              if (points.length < 4) return;
+              
+              var path =
+                'M' +
+                points.slice(0, 2).join(' ') +
+                'L' +
+                points.slice(2).join(' ') +
+                (tagName === 'polygon' ? 'z' : '');
+              break;
+              
+            default:
+              return;
+          }
+          
+          return path || '';
+        },
+        
+        // 将evenodd填充规则转换为nonzero填充规则
+        convertEvenoddToNonzero(pathData) {
+          // 1. 解析路径数据
+          const pathParser = new paper.Path(pathData);
+          
+          // 2. 检测每个子路径的方向和嵌套关系
+          let subpaths = this.extractSubpaths(pathData);
+          
+          // 3. 预处理：尝试分析是否是多层嵌套结构
+          const isNested = this.detectNestedStructure(subpaths);
+          
+          // 4. 根据规则调整子路径方向
+          let processedSubpaths = [];
+          
+          if (isNested) {
+            // 复杂嵌套结构处理
+            for (let i = 0; i < subpaths.length; i++) {
+              const subpath = subpaths[i];
+              const isOuterPath = this.isOuterPath(subpath, subpaths);
+              
+              if (isOuterPath) {
+                // 外部路径，确保是顺时针
+                if (!this.isClockwise(subpath)) {
+                  processedSubpaths.push(this.reversePathDirection(subpath));
+                } else {
+                  processedSubpaths.push(subpath);
+                }
+              } else {
+                // 内部路径（孔洞），确保是逆时针
+                if (this.isClockwise(subpath)) {
+                  processedSubpaths.push(this.reversePathDirection(subpath));
+                } else {
+                  processedSubpaths.push(subpath);
+                }
+              }
+            }
+          } else {
+            // 简单结构，基于索引的偶数/奇数规则
+            for (let i = 0; i < subpaths.length; i++) {
+              const subpath = subpaths[i];
+              if (i % 2 === 0) {
+                // 外部路径，保持原有方向（顺时针）
+                processedSubpaths.push(subpath);
+              } else {
+                // 内部路径，反转方向
+                processedSubpaths.push(this.reversePathDirection(subpath));
+              }
+            }
+          }
+          
+          // 5. 合并子路径
+          return processedSubpaths.join(' ');
+        },
+        
+        // 检测是否是嵌套结构
+        detectNestedStructure(subpaths) {
+          if (subpaths.length <= 1) return false;
+          
+          // 获取所有子路径的边界框
+          const bounds = subpaths.map(subpath => {
+            try {
+              const path = new paper.Path(subpath);
+              return {
+                path: subpath,
+                bounds: path.bounds
+              };
+            } catch (e) {
+              return null;
+            }
+          }).filter(item => item !== null);
+          
+          // 如果有重叠的边界框，可能是嵌套结构
+          for (let i = 0; i < bounds.length; i++) {
+            for (let j = 0; j < bounds.length; j++) {
+              if (i !== j) {
+                if (this.boundsContains(bounds[i].bounds, bounds[j].bounds)) {
+                  return true;
+                }
+              }
+            }
+          }
+          
+          return false;
+        },
+        
+        // 判断一个边界框是否包含另一个
+        boundsContains(bounds1, bounds2) {
+          return bounds1.x <= bounds2.x && 
+                 bounds1.y <= bounds2.y && 
+                 bounds1.x + bounds1.width >= bounds2.x + bounds2.width &&
+                 bounds1.y + bounds1.height >= bounds2.y + bounds2.height;
+        },
+        
+        // 判断一个路径是否是外部路径
+        isOuterPath(subpath, allSubpaths) {
+          try {
+            const path = new paper.Path(subpath);
+            const thisBounds = path.bounds;
+            
+            // 检查这个路径是否被其他路径包含
+            for (let i = 0; i < allSubpaths.length; i++) {
+              if (allSubpaths[i] === subpath) continue;
+              
+              const otherPath = new paper.Path(allSubpaths[i]);
+              const otherBounds = otherPath.bounds;
+              
+              // 如果这个路径的边界框被完全包含，它可能是内部路径
+              if (this.boundsContains(otherBounds, thisBounds)) {
+                return false;
+              }
+            }
+            
+            // 如果路径没有被任何其他路径包含，它是外部路径
+            return true;
+          } catch (e) {
+            // 解析错误，默认为外部路径
+            return true;
+          }
+        },
+        
+        // 判断路径是否是顺时针
+        isClockwise(pathData) {
+          try {
+            const path = new paper.Path(pathData);
+            return path.clockwise;
+          } catch (e) {
+            // 解析错误，默认为顺时针
+            return true;
+          }
+        },
+        
+        // 提取SVG路径中的子路径
+        extractSubpaths(pathData) {
+          // 使用更精确的方法提取子路径
+          try {
+            const path = new paper.Path(pathData);
+            
+            // 如果路径包含复合路径
+            if (path.children && path.children.length > 0) {
+              return path.children.map(child => child.pathData);
+            }
+            
+            // 简单路径，按M命令分割
+            const subpathsRaw = pathData.split(/(?=[Mm])/g);
+            
+            // 过滤掉空子路径
+            return subpathsRaw.filter(sp => sp.trim().length > 0);
+          } catch (e) {
+            // 发生错误，回退到简单分割方法
+            const subpathsRaw = pathData.split(/(?=[Mm])/g);
+            return subpathsRaw.filter(sp => sp.trim().length > 0);
+          }
+        },
+        
+        // 反转路径方向
+        reversePathDirection(pathData) {
+          // 使用Paper.js来反转路径方向
+          const path = new paper.Path(pathData);
+          path.reverse();
+          return path.pathData;
+        },
+        
+        saveTransformedSvg() {
+          if (!this.transformedSvg) {
+            this.$message.error('请先转换 SVG');
+            return;
+          }
+          
+          const blob = new Blob([this.transformedSvg], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = this.currentSvg.name; // 使用原始文件名覆盖
+          
+          document.body.appendChild(a);
+          setTimeout(() => {
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 0);
+          
+          this.$message.success('SVG 文件已保存');
+        },
+        
+        async batchSave() {
+          const processedFiles = this.files.filter(file => file.status === 'success' && file.transformedContent);
+          
+          if (processedFiles.length === 0) {
+            this.$message.error('没有已转换的文件');
+            return;
+          }
+          
+          if (this.transforming) {
+            this.$message.warning('请等待当前操作完成');
+            return;
+          }
+          
+          this.transforming = true;
+          
+          try {
+            // 创建压缩包
+            const zip = new JSZip();
+            
+            // 添加文件到zip
+            processedFiles.forEach(file => {
+              zip.file(file.name, file.transformedContent);
+            });
+            
+            // 生成zip文件并下载
+            const content = await zip.generateAsync({
+              type: 'blob',
+              compression: 'DEFLATE',
+              compressionOptions: { level: 6 }
+            });
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+            this.downloadBlob(content, `svg-converted-${timestamp}.zip`);
+            
+            this.$message.success(`已保存 ${processedFiles.length} 个SVG文件到ZIP包`);
+          } catch (error) {
+            console.error('保存文件失败:', error);
+            this.$message.error('保存失败: ' + error.message);
+          } finally {
+            this.transforming = false;
+          }
+        },
+        
+        // 下载单个SVG文件 (此方法不再使用)
+        downloadSingleFile(content, filename) {
+          console.warn('此方法已废弃');
+        },
+        
+        // 通用下载Blob的方法 (用于压缩包)
+        downloadBlob(blob, filename) {
+          // 创建一个隐藏的下载链接
+          const link = document.createElement('a');
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          
+          // 设置下载链接
+          const url = URL.createObjectURL(blob);
+          link.href = url;
+          link.download = filename;
+          
+          // 执行下载
+          link.click();
+          
+          // 清理
+          window.requestAnimationFrame(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          });
+        },
+        
+        formatFileSize(size) {
+          if (size < 1024) {
+            return size + ' B';
+          } else if (size < 1024 * 1024) {
+            return (size / 1024).toFixed(2) + ' KB';
+          } else {
+            return (size / (1024 * 1024)).toFixed(2) + ' MB';
+          }
+        },
+        
+        formatDate(timestamp) {
+          const date = new Date(timestamp);
+          return date.toLocaleString();
+        }
+      }
+    });
+    
+    app.use(DesignSystem);
+    app.mount('#app');
+  </script>
+</body>
+</html>
