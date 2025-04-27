@@ -2,46 +2,46 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-这是一个简单的 HTML 页面，用于演示或提供将 SVG 路径元素的 `fill-rule` 属性从 `evenodd` 转换为 `nonzero` 的功能。
+This is a simple HTML page designed to demonstrate or provide the functionality to convert the `fill-rule` attribute of SVG path elements from `evenodd` to `nonzero`.
 
-## 为什么需要这个转换？
+## Why is this conversion needed?
 
-SVG 的 `fill-rule` 属性决定了如何判断一个点是否在形状内部。
+The `fill-rule` attribute in SVG determines how to define the interior of a shape.
 
-* **`evenodd` (奇偶填充):** 通过从该点向任意方向绘制一条射线，并计算形状轮廓线与该射线的交点数。奇数表示在内部，偶数表示在外部。
-* **`nonzero` (非零填充):** 通过绘制射线并跟踪轮廓线的穿过方向（顺时针 +1，逆时针 -1），如果卷绕数之和不为零，则在内部。
+* **`evenodd`:** A ray is drawn from a point in any direction, and the number of path segment intersections with the ray is counted. If the number of intersections is odd, the point is inside; if even, it's outside.
+* **`nonzero`:** A ray is drawn from a point in any direction, and the winding number is tracked. The winding number is determined by the direction in which each path segment crosses the ray (clockwise +1, counter-clockwise -1). If the total winding number is not zero, the point is inside.
 
-在处理由多个重叠路径组成的复杂 SVG 时，`nonzero` 往往能提供更符合预期的填充效果。
+When dealing with complex SVGs composed of multiple overlapping paths, `nonzero` often provides a more intuitive and predictable filling behavior.
 
-## 如何使用
+## How to Use
 
-1.  **打开 `index.html` 文件** (假设你的 HTML 文件名为 `index.html`)：在你的浏览器中直接打开这个 HTML 文件。
-2.  **上传 SVG 图标：** 在页面提供的上传控件上传 SVG 图标。
-3.  **点击转换按钮：** 点击页面上的按钮开始转换。
-4.  **查看转换结果：** 转换后的 SVG 支持批量保存。
+1.  **Open the `index.html` file** (assuming your HTML file is named `index.html`): Open this HTML file directly in your web browser.
+2.  **Upload SVG Icons:** Upload your SVG icons using the provided upload control on the page.
+3.  **Click the Conversion Button:** Click the button on the page to start the conversion process.
+4.  **View Conversion Results:** The converted SVG files will be available for batch saving.
 
-## 功能
+## Features
 
-这个 HTML 页面提供了一个简单的界面，用于：
+This HTML page offers a straightforward interface to:
 
-* 接收用户输入的 SVG 代码。
-* 自动检测并替换 SVG 路径元素中的 `fill-rule="evenodd"` 为 `fill-rule="nonzero"`。
-* 实时显示转换后的 SVG 代码。
+* Receive SVG code input from the user.
+* Automatically detect and replace `fill-rule="evenodd"` with `fill-rule="nonzero"` in SVG path elements.
+* Display the converted SVG code in real-time.
 
-## 局限性
+## Limitations
 
-* 这是一个简单的客户端工具，所有的转换都在浏览器中完成。
-* 目前只关注 `fill-rule` 属性的转换，不会修改 SVG 的其他部分。
-* 可能无法处理非常复杂的或格式不规范的 SVG 代码。
+* Please ensure that SVG strokes are outlined before conversion.
+* Currently, only the `fill-rule` attribute is targeted for conversion; other parts of the SVG code will remain unchanged.
+* The tool might not handle highly complex or malformed SVG code correctly.
 
-## 贡献
+## Contribution
 
-欢迎通过提交 issue 的方式报告问题或提出建议。
+Feel free to report issues or suggest improvements by submitting issues.
 
-## 许可
+## License
 
-本项目基于 [MIT 许可证](https://opensource.org/licenses/MIT) 开源。
+This project is open-sourced under the [MIT License](https://opensource.org/licenses/MIT).
 
------
+---
 
-这个 README 文件更侧重于介绍一个直接在浏览器中运行的 HTML 工具。记得将 `index.html` 替换为你实际的 HTML 文件名。如果你的 HTML 页面有更具体的功能或交互方式，可以在 "功能" 部分进行更详细的描述。
+This README file now describes your HTML-based SVG conversion tool in English. Remember to replace `index.html` with the actual name of your HTML file. If your HTML page has more specific features or interactions, be sure to elaborate on them in the "Features" section.
